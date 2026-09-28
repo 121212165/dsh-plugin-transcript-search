@@ -1,0 +1,10 @@
+# Mounts transcript-search into a dsh profile. Point dataDir at the transcript
+# plugin's dataDir to search what it archived (defaults are identical).
+- insert:
+    - id: transcript-search
+      name: dsh-plugin-transcript-search
+      config:
+        enabled: true
+        # dataDir: ~/.dsh/transcripts
+        limit: 20          # max sessions in one result
+        snippet: 160       # chars of context around a hit
