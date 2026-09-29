@@ -86,12 +86,17 @@ export function search(lines: TranscriptLine[], rawQuery: string, options: { ses
   return { query: terms, sessions, totalHits: sessions.reduce((total, session) => total + session.hits, 0) };
 }
 
+/** ids all share the 'session-' prefix; showing it wastes 8 of 8 chars. */
+export function shortSessionId(sessionId: string): string {
+  return sessionId.replace(/^session-/, '').slice(0, 8);
+}
+
 const KIND_LABEL: Record<TranscriptLine['kind'], string> = { user: '👤', assistant: '🤖', tool: '🔧', system: 'ℹ️' };
 
 export function renderResult(result: SearchResult): string {
   if (!result.sessions.length) return `没有命中：${result.query.join(' + ') || '（空查询）'}`;
   const blocks = result.sessions.map((session) => {
-    const head = `${session.sessionId.slice(0, 8)}… · ${session.hits} 处命中 · ${session.firstAt.slice(0, 10)}~${session.lastAt.slice(0, 10)}`;
+    const head = `${shortSessionId(session.sessionId)} · ${session.hits} 处命中 · ${session.firstAt.slice(0, 10)}~${session.lastAt.slice(0, 10)}`;
     const samples = session.samples.map((sample) => `  ${KIND_LABEL[sample.kind]} ${sample.who ? `[${sample.who}] ` : ''}${sample.snippet}`).join('\n');
     return `${head}\n${samples}`;
   });
