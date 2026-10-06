@@ -1,5 +1,8 @@
 # dsh-plugin-transcript-search
 
+> 🧩 **dsh 插件家族**（22 件）：总目录 **[dsh-plugin-family](https://github.com/121212165/dsh-plugin-family)** ｜ 明星插件：**[ide-hub](https://github.com/121212165/dsh-plugin-ide-hub)** 跨 IDE 统一管理 · **[task-forge](https://github.com/121212165/dsh-plugin-task-forge)** 跨窗口无损交接 · **[quota](https://github.com/121212165/dsh-plugin-quota)** 实时用量仪表
+
+
 **EN** · Full-text search over the transcripts dsh-plugin-transcript writes: `/find <words>` and the `session_search` tool return ranked hits with excerpts, reading the month JSONL files directly. · 5 `node --test` green · the line-format contract is kept field-for-field with the writer · not live-mounted.
 
 DeepSeek Harness (dsh) 插件：在归档的会话转录里做跨会话全文搜索。数据源是 [dsh-plugin-transcript](https://github.com/121212165/dsh-plugin-transcript) 的按月 JSONL 边车（同一 schema、同一默认目录，两个插件按契约互通、不互相 import）——只装搜索也能用，但没数据；建议两个一起装。
