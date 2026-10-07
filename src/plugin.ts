@@ -28,7 +28,7 @@ export interface Config {
 
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true),
-  dataDir: Schema.string(),
+  dataDir: Schema.string().default(''),
   sessionLimit: Schema.natural().default(20),
   snippetLimit: Schema.natural().default(3),
   snippetWidth: Schema.natural().default(160),
@@ -43,9 +43,14 @@ export function readAllLines(dataDir: string): { records: TranscriptLine[]; skip
   let skipped = 0;
   if (!existsSync(dataDir)) return { records, skipped };
   for (const name of readdirSync(dataDir).filter(validName).sort()) {
-    const result = parseJsonl(readFileSync(join(dataDir, name), 'utf8'));
-    records.push(...result.records);
-    skipped += result.skipped;
+    try {
+      const result = parseJsonl(readFileSync(join(dataDir, name), 'utf8'));
+      records.push(...result.records);
+      skipped += result.skipped;
+    } catch {
+      // unreadable month file (permissions, torn write): search the rest
+      skipped++;
+    }
   }
   return { records, skipped };
 }
@@ -73,7 +78,8 @@ export function apply(ctx: Context, config: Config): void {
       if (!query) return { kind: 'error', text: '给点关键词，例如 /find 台账 预算' };
       const all = readAllLines(dataDir);
       if (!all.records.length) return { kind: 'error', text: `还没有归档转录（${dataDir}）。先装 dsh-plugin-transcript 积累数据。` };
-      return { kind: 'success', text: renderResult(search(all.records, query, options)) };
+      const suffix = all.skipped > 0 ? `\n⚠ ${all.skipped} 条损坏行/不可读文件被跳过` : '';
+      return { kind: 'success', text: renderResult(search(all.records, query, options)) + suffix };
     },
   });
 
@@ -88,6 +94,13 @@ export function apply(ctx: Context, config: Config): void {
         schema: { type: 'string' } as const,
         render: (_args, value) => [{ type: 'text', text: value }],
       },
+      presentCall: () => ({ card: 'generic' as const, title: '搜索会话', kind: 'search' as const }),
+      presentResult: (_args, value) => ({
+        card: 'generic' as const,
+        title: String(value).split('\n')[0]!.slice(0, 60),
+        kind: 'search' as const,
+        rawInput: value,
+      }),
       async execute(args) {
         const all = readAllLines(dataDir);
         const result = search(all.records, args.query, options);

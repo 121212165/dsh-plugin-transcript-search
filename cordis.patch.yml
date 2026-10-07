@@ -6,5 +6,5 @@
       config:
         enabled: true
         # dataDir: ~/.dsh/transcripts
-        limit: 20          # max sessions in one result
-        snippet: 160       # chars of context around a hit
+        sessionLimit: 20   # max sessions in one result
+        snippetWidth: 160  # chars of context around a hit
