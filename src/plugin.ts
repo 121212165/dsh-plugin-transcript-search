@@ -8,12 +8,24 @@ import Schema from '@deepseek-ai/schemastery';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type {} from '@deepseek-ai/dsh-commands';
 import type {} from '@deepseek-ai/dsh-tools';
-import { mkdirSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseJsonl, type TranscriptLine } from './transcript/line.ts';
 import { search, renderResult, snippetAround } from './search.ts';
+
+/** Per-month parsed-sidecar cache. Month files are parsed at most once per
+ * (mtime,size) key: /find on hundreds of MB of sidecar only pays the read on
+ * the first call after each format change; callers spread the arrays and must
+ * not mutate the cached ones. Entries live for the process lifetime of the
+ * mounted plugin — month files only ever shrink under family rotation. */
+interface MonthCache {
+  mtimeMs: number;
+  size: number;
+  records: TranscriptLine[];
+  skipped: number;
+}
 
 export const name = 'transcript-search';
 export const inject = ['commands', 'tools'];
@@ -38,15 +50,30 @@ export function expandHome(dir: string): string {
   return dir.startsWith('~') ? join(homedir(), dir.slice(1)) : dir;
 }
 
-export function readAllLines(dataDir: string): { records: TranscriptLine[]; skipped: number } {
+export function readAllLines(dataDir: string, cache?: Map<string, MonthCache>): { records: TranscriptLine[]; skipped: number } {
   const records: TranscriptLine[] = [];
   let skipped = 0;
   if (!existsSync(dataDir)) return { records, skipped };
   for (const name of readdirSync(dataDir).filter(validName).sort()) {
+    const file = join(dataDir, name);
     try {
-      const result = parseJsonl(readFileSync(join(dataDir, name), 'utf8'));
-      records.push(...result.records);
-      skipped += result.skipped;
+      let month: MonthCache;
+      let stat: { mtimeMs: number; size: number } | null = null;
+      try {
+        stat = statSync(file);
+      } catch {
+        // unreadable stats (permissions): parse deaf below
+      }
+      const cached = cache?.get(file);
+      if (cache && stat && cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+        month = cached;
+      } else {
+        const result = parseJsonl(readFileSync(file, 'utf8'));
+        month = { mtimeMs: stat?.mtimeMs ?? -1, size: stat?.size ?? -1, records: result.records, skipped: result.skipped };
+        if (cache && stat) cache.set(file, month);
+      }
+      records.push(...month.records);
+      skipped += month.skipped;
     } catch {
       // unreadable month file (permissions, torn write): search the rest
       skipped++;
@@ -68,6 +95,7 @@ export function apply(ctx: Context, config: Config): void {
 
   const dataDir = config.dataDir ? expandHome(config.dataDir) : join(homedir(), '.dsh', 'transcripts');
   const options = { sessionLimit: config.sessionLimit, snippetLimit: config.snippetLimit, snippetWidth: config.snippetWidth };
+  const monthCache = new Map<string, MonthCache>();
 
   ctx.commands.register({
     name: 'find',
@@ -76,7 +104,7 @@ export function apply(ctx: Context, config: Config): void {
     handler: ({ rawInput }) => {
       const query = String(rawInput ?? '').trim();
       if (!query) return { kind: 'error', text: '给点关键词，例如 /find 台账 预算' };
-      const all = readAllLines(dataDir);
+      const all = readAllLines(dataDir, monthCache);
       if (!all.records.length) return { kind: 'error', text: `还没有归档转录（${dataDir}）。先装 dsh-plugin-transcript 积累数据。` };
       const suffix = all.skipped > 0 ? `\n⚠ ${all.skipped} 条损坏行/不可读文件被跳过` : '';
       return { kind: 'success', text: renderResult(search(all.records, query, options)) + suffix };
@@ -102,7 +130,7 @@ export function apply(ctx: Context, config: Config): void {
         rawInput: value,
       }),
       async execute(args) {
-        const all = readAllLines(dataDir);
+        const all = readAllLines(dataDir, monthCache);
         const result = search(all.records, args.query, options);
         return renderResult(result);
       },

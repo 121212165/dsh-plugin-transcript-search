@@ -8,7 +8,7 @@ export interface SearchHit {
   sessionId: string;
   at: string;
   kind: TranscriptLine['kind'];
-  who?: string;
+  who?: string | undefined;
   snippet: string;
 }
 
