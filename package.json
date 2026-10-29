@@ -32,6 +32,11 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "catalog": {
+      "category": "会话与知识库",
+      "blurb": "跨会话全文搜索，与 transcript 的 JSONL 契约互通",
+      "entries": "`/find` `session_search`"
     }
   },
   "engines": {
